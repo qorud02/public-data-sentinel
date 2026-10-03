@@ -39,7 +39,7 @@ These commands use the virtual environment directly; activation is optional.
 
 The valid-data command returns exit code **0** with three records checked and no issues. The invalid-data command returns **1** and writes five issues: a negative measurement, a nonfinite number, an unsupported quality value, a duplicate station/date key, and an impossible calendar date.
 
-See the committed [passing JSON report](examples/valid-report.json) and [failing Markdown report](examples/invalid-report.md). These examples are synthetic fixtures, not observations from an institution.
+See the committed [passing JSON report](examples/valid-report.json) and [failing Markdown report](examples/invalid-report.md). The examples use synthetic CSV and JSON fixtures.
 
 Input example:
 
@@ -103,7 +103,7 @@ Start with the [contributor guide](CONTRIBUTING.md) for local setup, reproducibl
 
 ## Development
 
-Developed with AI assistance. Behavior is documented with executable examples and tests.
+Executable examples and regression tests document the tool's behavior.
 
 한국어: 공공 데이터 CSV·JSON을 분석이나 보고서에 넣기 전에 필수 값, 숫자 범위, 날짜, 중복 키를 점검하는 도구입니다. 기관 코드의 앞자리 0을 보존하고 오류 위치를 표시합니다.
 
