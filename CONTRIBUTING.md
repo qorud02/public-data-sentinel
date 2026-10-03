@@ -91,7 +91,7 @@ unreadable input or an invalid contract. The passing CSV example returns 0
 with three records and no issues. The invalid example returns 1 with five
 issues. Keep source files unchanged during validation.
 
-Current main supports CSV and JSON. Input-format ideas in issues remain
+The tool supports CSV, TSV and JSON. Input-format ideas in issues remain
 proposals until implemented and reviewed. Discuss compatibility, error
 locations, and existing parser behavior when proposing a format change.
 

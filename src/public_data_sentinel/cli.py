@@ -13,25 +13,27 @@ from .validation import ContractError, load_json, validate
 
 def read_records(path, records_key=None):
     text = pathlib.Path(path).read_text(encoding="utf-8-sig")
-    if pathlib.Path(path).suffix.lower() == ".csv":
+    suffix = pathlib.Path(path).suffix.lower()
+    if suffix in (".csv", ".tsv"):
+        format_name = "TSV" if suffix == ".tsv" else "CSV"
         if records_key:
             raise ValueError("--records-key applies only to JSON")
-        reader = csv.reader(io.StringIO(text), strict=True)
+        reader = csv.reader(io.StringIO(text), delimiter="\t" if suffix == ".tsv" else ",", strict=True)
         headers = next(reader, None)
         if not headers:
-            raise ValueError("CSV is empty")
+            raise ValueError(f"{format_name} is empty")
         if any(not header for header in headers) or len(headers) != len(set(headers)):
-            raise ValueError("CSV headers must be nonempty and unique")
+            raise ValueError(f"{format_name} headers must be nonempty and unique")
         records = []
         for row_number, row in enumerate(reader, 2):
             if not row:
                 continue
             if len(row) != len(headers):
-                raise ValueError(f"CSV line {row_number}: expected {len(headers)} fields, got {len(row)}")
+                raise ValueError(f"{format_name} line {row_number}: expected {len(headers)} fields, got {len(row)}")
             records.append(dict(zip(headers, row)))
         return records, headers
-    if pathlib.Path(path).suffix.lower() != ".json":
-        raise ValueError("Input filename must end in .csv or .json")
+    if suffix != ".json":
+        raise ValueError("Input filename must end in .csv, .tsv or .json")
     records = load_json(text)
     if records_key:
         if not isinstance(records, dict) or records_key not in records:
@@ -67,8 +69,8 @@ def _resolve_path(path):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Check a CSV or JSON extract against an explicit data contract.")
-    parser.add_argument("input", help="UTF-8 CSV or JSON file")
+    parser = argparse.ArgumentParser(description="Check a CSV, TSV or JSON extract against an explicit data contract.")
+    parser.add_argument("input", help="UTF-8 CSV, TSV or JSON file")
     parser.add_argument("--contract", required=True, help="JSON contract file")
     parser.add_argument("--records-key", help="Top-level JSON key containing the record array")
     parser.add_argument("--format", choices=("json", "markdown"), default="json")

@@ -4,7 +4,7 @@
 
 Catch malformed public-data extracts before they enter a spreadsheet, report, or monitoring workflow.
 
-A small Python CLI validates CSV and JSON files against an explicit data contract. It reports the record and field that failed, preserves text identifiers such as `00123`, and produces JSON or Markdown suitable for a review or CI job.
+A small Python CLI validates CSV, TSV and JSON files against an explicit data contract. It reports the record and field that failed, preserves text identifiers such as `00123`, and produces JSON or Markdown suitable for a review or CI job.
 
 **For:** analysts, small research teams, and business operators working with recurring public-data downloads.
 
@@ -39,7 +39,7 @@ These commands use the virtual environment directly; activation is optional.
 
 The valid-data command returns exit code **0** with three records checked and no issues. The invalid-data command returns **1** and writes five issues: a negative measurement, a nonfinite number, an unsupported quality value, a duplicate station/date key, and an impossible calendar date.
 
-See the committed [passing JSON report](examples/valid-report.json) and [failing Markdown report](examples/invalid-report.md). The examples use synthetic CSV and JSON fixtures.
+See the committed [passing JSON report](examples/valid-report.json) and [failing Markdown report](examples/invalid-report.md). The examples use synthetic CSV, TSV and JSON fixtures.
 
 Input example:
 
@@ -66,7 +66,17 @@ Contract:
 
 Columns are required by default; set `"required": false` for an optional field. Supported types are `string`, `integer`, `decimal`, and `date` (`YYYY-MM-DD`). Numeric bounds are inclusive. The composite key is checked only when all its components have type-valid, nonmissing values. Unknown contract keys fail early so a misspelled rule cannot silently weaken a check.
 
-JSON arrays work directly. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV rows, and nonstandard JSON numbers are rejected.
+JSON arrays work directly. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV/TSV rows, and nonstandard JSON numbers are rejected.
+
+## Tab-delimited extracts
+
+Use the same contract directly with a tab-delimited `.tsv` file:
+
+```sh
+data-sentinel examples/valid.tsv --contract examples/contract.json
+```
+
+The example returns `0` with three records and no issues. `.TSV` is also accepted. The reader uses a fixed tab delimiter, keeps leading zeroes and surrounding whitespace, and supports quoted tabs and newlines. CSV uses commas. `--records-key` applies to JSON inputs.
 
 ## Automation and Python use
 
@@ -95,7 +105,7 @@ GitHub Actions tests Windows and Linux with Python 3.10, 3.12, and 3.14. See the
 
 ## Contributing
 
-A first contribution: [add TSV input](https://github.com/qorud02/public-data-sentinel/issues/2). The issue describes compatibility requirements and regression cases.
+Small synthetic fixtures and clearer validation diagnostics make useful contributions. [TSV support #2](https://github.com/qorud02/public-data-sentinel/issues/2) records the input compatibility requirements.
 
 Start with the [contributor guide](CONTRIBUTING.md) for local setup, reproducible fixtures, and focused draft PRs. Check [open issues](https://github.com/qorud02/public-data-sentinel/issues) and [existing PRs](https://github.com/qorud02/public-data-sentinel/pulls) before starting.
 
@@ -105,6 +115,6 @@ Start with the [contributor guide](CONTRIBUTING.md) for local setup, reproducibl
 
 Executable examples and regression tests document the tool's behavior.
 
-한국어: 공공 데이터 CSV·JSON을 분석이나 보고서에 넣기 전에 필수 값, 숫자 범위, 날짜, 중복 키를 점검하는 도구입니다. 기관 코드의 앞자리 0을 보존하고 오류 위치를 표시합니다.
+한국어: 공공 데이터 CSV·TSV·JSON을 분석이나 보고서에 넣기 전에 필수 값, 숫자 범위, 날짜, 중복 키를 점검하는 도구입니다. 기관 코드의 앞자리 0을 보존하고 오류 위치를 표시합니다.
 
 MIT license.

@@ -1,0 +1,4 @@
+station_id	date	rainfall_mm	quality
+00123	2026-09-01	12.5	measured
+00123	2026-09-02	0	estimated
+00456	2026-09-01	8.75	measured
