@@ -82,6 +82,8 @@ The example returns `0` with three records and no issues. `.TSV` is also accepte
 
 Exit statuses: **0** = passed, **1** = data violations, **2** = unreadable input, malformed file, or invalid contract. Output cannot overwrite the input or contract, including resolved path aliases and existing hard links to either file.
 
+Version 0.2.1 writes JSON and Markdown reports as UTF-8 on stdout and in `--output` files. Pipes and redirects preserve Unicode column names on Windows, including when a legacy code page is configured.
+
 ```python
 from public_data_sentinel import validate
 
