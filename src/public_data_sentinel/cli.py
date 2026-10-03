@@ -48,9 +48,17 @@ def markdown(report):
     def escape(value):
         text = str(value if value is not None else "-")
         text = text.replace("\\", "\\\\")
-        for char in ("`", "*", "_", "[", "]"):
+        for char in ("`", "*", "_", "[", "]", "~"):
             text = text.replace(char, f"\\{char}")
-        return html.escape(text, quote=False).replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+        text = html.escape(text, quote=False).replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+        # GFM strips whitespace at table-cell boundaries before decoding entities.
+        start = len(text) - len(text.lstrip())
+        end = max(start, len(text.rstrip()))
+        return (
+            "".join(f"&#{ord(char)};" for char in text[:start])
+            + text[start:end]
+            + "".join(f"&#{ord(char)};" for char in text[end:])
+        )
 
     status = "PASS" if report["valid"] else "FAIL"
     lines = [f"# Data quality: {status}", "", f"Records checked: {report['records_checked']}", f"Issues: {report['error_count']}", ""]
