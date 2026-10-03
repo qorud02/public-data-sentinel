@@ -126,7 +126,7 @@ MIT license.
 The Linux amd64 image includes Python 3.12 and an installed Sentinel wheel. From this repository directory:
 
 ```sh
-docker run --rm --platform linux/amd64 --network none --read-only --mount "type=bind,source=${PWD},target=/work,readonly" ghcr.io/qorud02/public-data-sentinel:0.2.0 /work/examples/valid.csv --contract /work/examples/contract.json
+docker run --rm --platform linux/amd64 --network none --read-only --mount "type=bind,source=${PWD},target=/work,readonly" ghcr.io/qorud02/public-data-sentinel:0.2.1 /work/examples/valid.csv --contract /work/examples/contract.json
 ```
 
 Use the same command in PowerShell with Docker Desktop configured for Linux containers. It exits 0 with three records checked and no issues. Replace valid.csv with invalid.csv to report five data violations and exit 1.
@@ -134,15 +134,15 @@ Use the same command in PowerShell with Docker Desktop configured for Linux cont
 Check files in your current directory:
 
 ```sh
-docker run --rm --platform linux/amd64 --network none --read-only --mount "type=bind,source=${PWD},target=/work,readonly" ghcr.io/qorud02/public-data-sentinel:0.2.0 /work/extract.json --contract /work/contract.json --format markdown
+docker run --rm --platform linux/amd64 --network none --read-only --mount "type=bind,source=${PWD},target=/work,readonly" ghcr.io/qorud02/public-data-sentinel:0.2.1 /work/extract.json --contract /work/contract.json --format markdown
 ```
 
 Inputs and contracts use file paths inside the container. The tool runs as UID 10001 and prints the report on stdout. Keep mounted files readable by that user; the mounted source stays read-only.
 
-Download public_data_sentinel-0.2.0-py3-none-any.whl and SHA256SUMS from the [release](https://github.com/qorud02/public-data-sentinel/releases/tag/v0.2.0), then install:
+Download public_data_sentinel-0.2.1-py3-none-any.whl and SHA256SUMS from the [release](https://github.com/qorud02/public-data-sentinel/releases/tag/v0.2.1), then install:
 
 ```sh
-python -m pip install --no-index --no-deps ./public_data_sentinel-0.2.0-py3-none-any.whl
+python -m pip install --no-index --no-deps ./public_data_sentinel-0.2.1-py3-none-any.whl
 data-sentinel --help
 data-sentinel examples/valid.csv --contract examples/contract.json
 python -c "from importlib.metadata import version; print(version('public-data-sentinel'))"
