@@ -55,7 +55,7 @@ class IssueTableParser(HTMLParser):
 
 
 def assert_literal_issue_cells(test_case, markdown_text, issues):
-    rendered = MarkdownIt("commonmark").enable("table").render(markdown_text)
+    rendered = MarkdownIt("commonmark").enable(["table", "strikethrough"]).render(markdown_text)
     parser = IssueTableParser()
     parser.feed(rendered)
     expected = [
@@ -186,6 +186,8 @@ class ValidationTests(unittest.TestCase):
 
     def test_markdown_escapes_formatting_characters_in_field_and_detail(self):
         cases = [
+            ("~~struck~~", r"\~\~struck\~\~"),
+            ("~single~", r"\~single\~"),
             ("[station](https://example.invalid)", r"\[station\](https://example.invalid)"),
             ("**station_id**", r"\*\*station\_id\*\*"),
             ("`station_id`", r"\`station\_id\`"),
@@ -214,6 +216,31 @@ class ValidationTests(unittest.TestCase):
             with self.subTest(case=raw):
                 self.assertIn(f"| {escaped} |", text)
                 self.assertIn(f"| invalid {escaped} |", text)
+        assert_literal_issue_cells(self, text, issues)
+
+    def test_markdown_preserves_boundary_whitespace_in_fields_and_details(self):
+        cases = [
+            (" name ", "&#32;name&#32;"),
+            ("  ", "&#32;&#32;"),
+            ("\tname\t", "&#9;name&#9;"),
+            (" \t ", "&#32;&#9;&#32;"),
+            ("name\n", "name&#32;"),
+            ("\nname", "&#32;name"),
+            ("\u00a0name\u00a0", "&#160;name&#160;"),
+            ("\u2003name\u2003", "&#8195;name&#8195;"),
+            ("name\tpart", "name\tpart"),
+            ("ordinary  words", "ordinary  words"),
+            (" \nname\r\n ", "&#32;&#32;name&#32;&#32;&#32;"),
+        ]
+        issues = [
+            {"record": idx + 1, "field": raw, "code": "type", "message": raw}
+            for idx, (raw, _) in enumerate(cases)
+        ]
+        report = {"valid": False, "records_checked": len(cases), "error_count": len(cases), "issues": issues}
+        text = markdown(report)
+        for raw, escaped in cases:
+            with self.subTest(case=raw):
+                self.assertIn(f"| {escaped} | type | {escaped} |", text)
         assert_literal_issue_cells(self, text, issues)
 
 
@@ -386,6 +413,8 @@ class CLITests(unittest.TestCase):
 
     def test_markdown_report_preserves_contract_columns_in_csv_and_json(self):
         cases = [
+            ("~~struck~~", r"\~\~struck\~\~"),
+            ("~single~", r"\~single\~"),
             ("[station](https://example.invalid)", r"\[station\](https://example.invalid)"),
             ("**station_id**", r"\*\*station\_id\*\*"),
             ("`station_id`", r"\`station\_id\`"),
@@ -395,6 +424,19 @@ class CLITests(unittest.TestCase):
             ("<b>station</b>", "&lt;b&gt;station&lt;/b&gt;"),
             ("정류장_id", r"정류장\_id"),
             ("station&id", "station&amp;id"),
+            ("station\nname", "station name"),
+            ("~~station|<b>\nname~~", r"\~\~station&#124;&lt;b&gt; name\~\~"),
+            (" name ", "&#32;name&#32;"),
+            ("  ", "&#32;&#32;"),
+            ("\tname\t", "&#9;name&#9;"),
+            (" \t ", "&#32;&#9;&#32;"),
+            ("name\n", "name&#32;"),
+            ("\nname", "&#32;name"),
+            ("\u00a0name\u00a0", "&#160;name&#160;"),
+            ("\u2003name\u2003", "&#8195;name&#8195;"),
+            ("name\tpart", "name\tpart"),
+            ("ordinary  words", "ordinary  words"),
+            (" \nname\n ", "&#32;&#32;name&#32;&#32;"),
         ]
         names = [raw for raw, _ in cases]
         with tempfile.TemporaryDirectory() as temp:
