@@ -99,7 +99,11 @@ def main(argv=None):
         if args.output:
             pathlib.Path(args.output).write_text(output, encoding="utf-8")
         else:
-            print(output, end="")
+            if hasattr(sys.stdout, "buffer"):
+                sys.stdout.buffer.write(output.encode("utf-8"))
+                sys.stdout.buffer.flush()
+            else:
+                sys.stdout.write(output)
         return 0 if report["valid"] else 1
     except (OSError, UnicodeError, ValueError, csv.Error, ContractError) as exc:
         print(f"data-sentinel: {exc}", file=sys.stderr)

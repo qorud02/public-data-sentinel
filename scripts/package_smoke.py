@@ -57,6 +57,9 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         converted = io.StringIO(newline="")
         csv.writer(converted, delimiter="\t").writerows(csv.reader(io.StringIO((root / "examples" / name).read_text(encoding="utf-8"))))
         return converted.getvalue().encode(encoding)
+    unicode_field = "한글 👋"
+    unicode_csv = io.StringIO(newline="")
+    csv.writer(unicode_csv).writerows([[unicode_field], ["bad"]])
     payloads = {
         "malformed.json": b"[",
         "duplicate-key.json": b'[{"a":"1","a":"2"}]',
@@ -70,6 +73,8 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         "literal.csv": buffer.getvalue().encode("utf-8"),
         "literal.tsv": literal_tsv.getvalue().encode("utf-8"),
         "literal.json": json.dumps([{field: "bad"}], ensure_ascii=False).encode("utf-8"),
+        "unicode-👋.csv": unicode_csv.getvalue().encode("utf-8"),
+        "unicode-👋-contract.json": json.dumps({"columns": {unicode_field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
         "literal-contract.json": json.dumps({"columns": {field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
     }
     for name, payload in payloads.items():
@@ -119,6 +124,30 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         assert not rendered.forbidden, rendered.forbidden
         assert rendered.values[1] == field.replace("\n", " "), rendered.values
         assert len(rendered.values) == 4, rendered.values
+    unicode_arguments = [extra("unicode-👋.csv"), "--contract", extra("unicode-👋-contract.json")]
+    unicode_sources = {name: (temp / name).read_bytes()
+                       for name in ("unicode-👋.csv", "unicode-👋-contract.json")}
+    legacy_env = dict(clean_env, PYTHONIOENCODING="cp949")
+    for report_format in ("json", "markdown"):
+        command = (base + ["--env", "PYTHONIOENCODING=cp949", args.container]
+                   if args.container else prefix)
+        result = subprocess.run(command + unicode_arguments + ["--format", report_format],
+                                cwd=temp, env=legacy_env, capture_output=True, timeout=180)
+        assert result.returncode == 1 and result.stderr == b"", (report_format, result.returncode, result.stderr)
+        content = result.stdout.decode("utf-8")
+        assert unicode_field.encode("utf-8") in result.stdout, result.stdout
+        if report_format == "json":
+            report = json.loads(content)
+            assert not report["valid"] and report["error_count"] == 1 and report["records_checked"] == 1, report
+            assert report["issues"][0]["field"] == unicode_field, report
+        else:
+            rendered = Cells()
+            rendered.feed(MarkdownIt("commonmark").enable(["table", "strikethrough"]).render(content))
+            assert not rendered.forbidden and len(rendered.values) == 4, rendered.values
+            assert rendered.values[1] == unicode_field, rendered.values
+        for name, original in unicode_sources.items():
+            assert (temp / name).read_bytes() == original, name
+        checks.append(report_format + "-utf8-stdout-under-cp949")
     for name in ("literal.csv", "literal.tsv"):
         before = (temp / name).read_bytes()
         run([extra(name), "--contract", extra("literal-contract.json"),

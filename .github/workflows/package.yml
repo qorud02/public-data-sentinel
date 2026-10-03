@@ -8,7 +8,7 @@ on:
       version:
         description: "Version matching pyproject.toml (without v)"
         required: true
-        default: "0.2.0"
+        default: "0.2.1"
         type: string
 
 permissions:
