@@ -44,7 +44,11 @@ def read_records(path, records_key=None):
 
 def markdown(report):
     def escape(value):
-        return html.escape(str(value if value is not None else "-"), quote=False).replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
+        text = str(value if value is not None else "-")
+        text = text.replace("\\", "\\\\")
+        for char in ("`", "*", "_", "[", "]"):
+            text = text.replace(char, f"\\{char}")
+        return html.escape(text, quote=False).replace("|", "&#124;").replace("\n", " ").replace("\r", " ")
 
     status = "PASS" if report["valid"] else "FAIL"
     lines = [f"# Data quality: {status}", "", f"Records checked: {report['records_checked']}", f"Issues: {report['error_count']}", ""]

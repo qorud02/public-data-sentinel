@@ -1,4 +1,5 @@
 import copy
+import csv
 import json
 import os
 import pathlib
@@ -134,6 +135,44 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("&lt;b&gt;&#124; x", text)
         self.assertNotIn("<b>", text)
 
+    def test_markdown_escapes_formatting_characters_in_field_and_detail(self):
+        cases = [
+            ("[station](https://example.invalid)", r"\[station\](https://example.invalid)"),
+            ("**station_id**", r"\*\*station\_id\*\*"),
+            ("`station_id`", r"\`station\_id\`"),
+            ("_station_id_", r"\_station\_id\_"),
+            (r"station\_id", r"station\\\_id"),
+            ("station|name", "station&#124;name"),
+            ("<b>station</b>", "&lt;b&gt;station&lt;/b&gt;"),
+            ("정류장_id", r"정류장\_id"),
+            ("station&id", "station&amp;id"),
+        ]
+        issues = [
+            {"record": idx + 1, "field": raw, "code": "type", "message": f"invalid {raw}"}
+            for idx, (raw, _) in enumerate(cases)
+        ]
+        report = {
+            "valid": False,
+            "records_checked": len(cases),
+            "error_count": len(cases),
+            "issues": issues,
+        }
+        text = markdown(report)
+        for raw, escaped in cases:
+            with self.subTest(case=raw):
+                self.assertIn(f"| {escaped} |", text)
+
+        try:
+            from markdown_it import MarkdownIt
+            rendered = MarkdownIt("commonmark").enable("table").render(text)
+            self.assertNotIn("<a ", rendered)
+            self.assertNotIn("<strong>", rendered)
+            self.assertNotIn("<code>", rendered)
+            self.assertNotIn("<em>", rendered)
+            self.assertNotIn("<b>", rendered)
+        except ImportError:
+            pass
+
 
 class CLITests(unittest.TestCase):
     def test_bom_csv_and_ragged_rows(self):
@@ -199,6 +238,59 @@ class CLITests(unittest.TestCase):
                     self.assertEqual(process.returncode, 2, process.stderr)
                     self.assertEqual(process.stdout, "")
                     self.assertEqual(process.stderr, "data-sentinel: id: type must be string, integer, decimal or date\n")
+
+    def test_markdown_report_preserves_contract_columns_in_csv_and_json(self):
+        cases = [
+            ("[station](https://example.invalid)", r"\[station\](https://example.invalid)"),
+            ("**station_id**", r"\*\*station\_id\*\*"),
+            ("`station_id`", r"\`station\_id\`"),
+            ("_station_id_", r"\_station\_id\_"),
+            (r"station\_id", r"station\\\_id"),
+            ("station|name", "station&#124;name"),
+            ("<b>station</b>", "&lt;b&gt;station&lt;/b&gt;"),
+            ("정류장_id", r"정류장\_id"),
+            ("station&id", "station&amp;id"),
+        ]
+        names = [raw for raw, _ in cases]
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            contract = root / "contract.json"
+            contract.write_text(json.dumps({
+                "columns": {name: {"type": "integer"} for name in names}
+            }), encoding="utf-8")
+
+            # JSON input
+            records_json = root / "records.json"
+            records_json.write_text(json.dumps([dict.fromkeys(names, "invalid")]), encoding="utf-8")
+            report_json_md = root / "report_json.md"
+            self.assertEqual(main([str(records_json), "--contract", str(contract), "--format", "markdown", "--output", str(report_json_md)]), 1)
+            json_md = report_json_md.read_text(encoding="utf-8")
+            for _, escaped in cases:
+                self.assertIn(escaped, json_md)
+
+            # CSV input
+            records_csv = root / "records.csv"
+            with open(records_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(names)
+                writer.writerow(["invalid"] * len(names))
+            report_csv_md = root / "report_csv.md"
+            self.assertEqual(main([str(records_csv), "--contract", str(contract), "--format", "markdown", "--output", str(report_csv_md)]), 1)
+            csv_md = report_csv_md.read_text(encoding="utf-8")
+            for _, escaped in cases:
+                self.assertIn(escaped, csv_md)
+
+            try:
+                from markdown_it import MarkdownIt
+                renderer = MarkdownIt("commonmark").enable("table")
+                for md_text in (json_md, csv_md):
+                    rendered = renderer.render(md_text)
+                    self.assertNotIn("<a ", rendered)
+                    self.assertNotIn("<strong>", rendered)
+                    self.assertNotIn("<code>", rendered)
+                    self.assertNotIn("<em>", rendered)
+            except ImportError:
+                pass
 
 
 if __name__ == "__main__":
