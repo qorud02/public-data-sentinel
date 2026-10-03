@@ -8,6 +8,9 @@ import sys
 import tempfile
 import unittest
 from decimal import Decimal
+from html.parser import HTMLParser
+
+from markdown_it import MarkdownIt
 
 from public_data_sentinel.cli import main, markdown, read_records
 from public_data_sentinel.validation import ContractError, check_contract, load_json, validate
@@ -21,6 +24,50 @@ def row(**updates):
     result = {"station_id": "00123", "date": "2026-09-01", "rainfall_mm": "12.5", "quality": "measured"}
     result.update(updates)
     return result
+
+
+class IssueTableParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows = []
+        self.cell_tags = []
+        self.current_row = []
+        self.current_cell = None
+
+    def handle_starttag(self, tag, attrs):
+        if self.current_cell is not None:
+            self.cell_tags.append(tag)
+        if tag == "tr":
+            self.current_row = []
+        elif tag == "td":
+            self.current_cell = []
+
+    def handle_data(self, data):
+        if self.current_cell is not None:
+            self.current_cell.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self.current_cell is not None:
+            self.current_row.append("".join(self.current_cell))
+            self.current_cell = None
+        elif tag == "tr" and self.current_row:
+            self.rows.append(self.current_row)
+
+
+def assert_literal_issue_cells(test_case, markdown_text, issues):
+    rendered = MarkdownIt("commonmark").enable("table").render(markdown_text)
+    parser = IssueTableParser()
+    parser.feed(rendered)
+    expected = [
+        [
+            str(issue[key] if issue[key] is not None else "-")
+            .replace("\n", " ").replace("\r", " ")
+            for key in ("record", "field", "code", "message")
+        ]
+        for issue in issues
+    ]
+    test_case.assertEqual(parser.rows, expected)
+    test_case.assertEqual(parser.cell_tags, [])
 
 
 class ValidationTests(unittest.TestCase):
@@ -131,9 +178,11 @@ class ValidationTests(unittest.TestCase):
                 load_json(value)
 
     def test_markdown_escapes_field_and_detail(self):
-        text = markdown({"valid": False, "records_checked": 1, "error_count": 1, "issues": [{"record": 1, "field": "<b>|\nx", "code": "type", "message": "hello\rworld"}]})
+        issues = [{"record": 1, "field": "<b>|\nx", "code": "type", "message": "hello\rworld"}]
+        text = markdown({"valid": False, "records_checked": 1, "error_count": 1, "issues": issues})
         self.assertIn("&lt;b&gt;&#124; x", text)
         self.assertNotIn("<b>", text)
+        assert_literal_issue_cells(self, text, issues)
 
     def test_markdown_escapes_formatting_characters_in_field_and_detail(self):
         cases = [
@@ -146,6 +195,9 @@ class ValidationTests(unittest.TestCase):
             ("<b>station</b>", "&lt;b&gt;station&lt;/b&gt;"),
             ("정류장_id", r"정류장\_id"),
             ("station&id", "station&amp;id"),
+            ("station\nname", "station name"),
+            ("station\rname", "station name"),
+            ("station\r\nname", "station  name"),
         ]
         issues = [
             {"record": idx + 1, "field": raw, "code": "type", "message": f"invalid {raw}"}
@@ -161,17 +213,8 @@ class ValidationTests(unittest.TestCase):
         for raw, escaped in cases:
             with self.subTest(case=raw):
                 self.assertIn(f"| {escaped} |", text)
-
-        try:
-            from markdown_it import MarkdownIt
-            rendered = MarkdownIt("commonmark").enable("table").render(text)
-            self.assertNotIn("<a ", rendered)
-            self.assertNotIn("<strong>", rendered)
-            self.assertNotIn("<code>", rendered)
-            self.assertNotIn("<em>", rendered)
-            self.assertNotIn("<b>", rendered)
-        except ImportError:
-            pass
+                self.assertIn(f"| invalid {escaped} |", text)
+        assert_literal_issue_cells(self, text, issues)
 
 
 class CLITests(unittest.TestCase):
@@ -262,11 +305,24 @@ class CLITests(unittest.TestCase):
             # JSON input
             records_json = root / "records.json"
             records_json.write_text(json.dumps([dict.fromkeys(names, "invalid")]), encoding="utf-8")
+            source_bytes = records_json.read_bytes()
+            contract_bytes = contract.read_bytes()
             report_json_md = root / "report_json.md"
             self.assertEqual(main([str(records_json), "--contract", str(contract), "--format", "markdown", "--output", str(report_json_md)]), 1)
             json_md = report_json_md.read_text(encoding="utf-8")
             for _, escaped in cases:
                 self.assertIn(escaped, json_md)
+            self.assertEqual(records_json.read_bytes(), source_bytes)
+            self.assertEqual(contract.read_bytes(), contract_bytes)
+
+            json_report = root / "report.json"
+            self.assertEqual(main([str(records_json), "--contract", str(contract), "--output", str(json_report)]), 1)
+            report = json.loads(json_report.read_text(encoding="utf-8"))
+            self.assertEqual(set(report), {"valid", "records_checked", "error_count", "issues"})
+            self.assertEqual([issue["field"] for issue in report["issues"]], names)
+            self.assertEqual(records_json.read_bytes(), source_bytes)
+            self.assertEqual(contract.read_bytes(), contract_bytes)
+            assert_literal_issue_cells(self, json_md, report["issues"])
 
             # CSV input
             records_csv = root / "records.csv"
@@ -274,23 +330,15 @@ class CLITests(unittest.TestCase):
                 writer = csv.writer(f)
                 writer.writerow(names)
                 writer.writerow(["invalid"] * len(names))
+            source_bytes = records_csv.read_bytes()
             report_csv_md = root / "report_csv.md"
             self.assertEqual(main([str(records_csv), "--contract", str(contract), "--format", "markdown", "--output", str(report_csv_md)]), 1)
             csv_md = report_csv_md.read_text(encoding="utf-8")
             for _, escaped in cases:
                 self.assertIn(escaped, csv_md)
-
-            try:
-                from markdown_it import MarkdownIt
-                renderer = MarkdownIt("commonmark").enable("table")
-                for md_text in (json_md, csv_md):
-                    rendered = renderer.render(md_text)
-                    self.assertNotIn("<a ", rendered)
-                    self.assertNotIn("<strong>", rendered)
-                    self.assertNotIn("<code>", rendered)
-                    self.assertNotIn("<em>", rendered)
-            except ImportError:
-                pass
+            self.assertEqual(records_csv.read_bytes(), source_bytes)
+            self.assertEqual(contract.read_bytes(), contract_bytes)
+            assert_literal_issue_cells(self, csv_md, report["issues"])
 
 
 if __name__ == "__main__":
