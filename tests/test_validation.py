@@ -218,6 +218,108 @@ class ValidationTests(unittest.TestCase):
 
 
 class CLITests(unittest.TestCase):
+    def test_tsv_bom_crlf_strings_and_suffixes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            for suffix in (".tsv", ".TSV"):
+                with self.subTest(suffix=suffix):
+                    file = pathlib.Path(temp) / ("data" + suffix)
+                    file.write_bytes("\ufeffid\tname\tcount\r\n00123\t 부산 \t2\r\n\r\n".encode("utf-8"))
+                    records, headers = read_records(file)
+                    self.assertEqual(headers, ["id", "name", "count"])
+                    self.assertEqual(records, [{"id": "00123", "name": " 부산 ", "count": "2"}])
+
+    def test_tsv_quoted_tabs_newlines_and_quotes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            file = pathlib.Path(temp) / "data.tsv"
+            file.write_text('id\tnote\n00123\t"탭\t줄\n인용 ""문자"""\n', encoding="utf-8")
+            records, headers = read_records(file)
+            self.assertEqual(headers, ["id", "note"])
+            self.assertEqual(records, [{"id": "00123", "note": '탭\t줄\n인용 "문자"'}])
+
+    def test_tsv_rejects_empty_and_duplicate_headers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            file = pathlib.Path(temp) / "data.tsv"
+            for content in ("", "\n", "id\tid\na\tb\n", "id\t\na\tb\n"):
+                with self.subTest(content=content):
+                    file.write_text(content, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "TSV"):
+                        read_records(file)
+
+    def test_tsv_rejects_short_long_and_malformed_rows(self):
+        with tempfile.TemporaryDirectory() as temp:
+            file = pathlib.Path(temp) / "data.tsv"
+            for row_text in ("00123\n", "00123\tx\ty\n"):
+                with self.subTest(row_text=row_text):
+                    file.write_text("id\tname\n" + row_text, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "TSV line 2"):
+                        read_records(file)
+            file.write_text('id\tname\n00123\t"unclosed\n', encoding="utf-8")
+            with self.assertRaises(csv.Error):
+                read_records(file)
+
+    def test_tsv_records_key_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            file = pathlib.Path(temp) / "data.tsv"
+            file.write_text("id\n00123\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "--records-key applies only to JSON"):
+                read_records(file, "items")
+
+    def test_equivalent_csv_tsv_validation_reports(self):
+        with tempfile.TemporaryDirectory() as temp:
+            file = pathlib.Path(temp) / "data.tsv"
+            for fixture in ("valid.csv", "invalid.csv"):
+                with self.subTest(fixture=fixture):
+                    original, csv_headers = read_records(ROOT / "examples" / fixture)
+                    with file.open("w", newline="", encoding="utf-8") as handle:
+                        writer = csv.writer(handle, delimiter="\t")
+                        writer.writerow(csv_headers)
+                        writer.writerows([record[column] for column in csv_headers] for record in original)
+                    records, tsv_headers = read_records(file)
+                    self.assertEqual(records, original)
+                    self.assertEqual(validate(records, CONTRACT, headers=tsv_headers),
+                                     validate(original, CONTRACT, headers=csv_headers))
+
+    def test_tsv_cli_exit_codes_and_source_bytes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            file, contract, output = root / "data.tsv", root / "contract.json", root / "report.json"
+            contract.write_text(json.dumps({"columns": {"id": {"type": "string"}, "count": {"type": "integer"}}}), encoding="utf-8")
+            contract_bytes = contract.read_bytes()
+            for content, expected in (("id\tcount\n00123\t2\n", 0),
+                                      ("id\tcount\n00123\tinvalid\n", 1),
+                                      ("id\tcount\n00123\n", 2)):
+                with self.subTest(expected=expected):
+                    file.write_text(content, encoding="utf-8")
+                    before = file.read_bytes()
+                    self.assertEqual(main([str(file), "--contract", str(contract), "--output", str(output)]), expected)
+                    self.assertEqual(file.read_bytes(), before)
+                    self.assertEqual(contract.read_bytes(), contract_bytes)
+                    if expected < 2:
+                        report = json.loads(output.read_text(encoding="utf-8"))
+                        self.assertEqual(set(report), {"valid", "records_checked", "error_count", "issues"})
+                        self.assertEqual(report["valid"], expected == 0)
+            file.write_text("id\tcount\n00123\t2\n", encoding="utf-8")
+            self.assertEqual(main([str(file), "--contract", str(contract), "--records-key", "items"]), 2)
+
+    def test_tsv_output_source_aliases_and_hardlinks_are_protected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            file, contract = root / "data.tsv", root / "contract.json"
+            file.write_text("id\n00123\n", encoding="utf-8")
+            contract.write_text(json.dumps({"columns": {"id": {"type": "string"}}}), encoding="utf-8")
+            before = {source: source.read_bytes() for source in (file, contract)}
+            for source in (file, contract):
+                for output in (source, root / ".." / root.name / source.name):
+                    with self.subTest(source=source.name, output=output):
+                        self.assertEqual(main([str(file), "--contract", str(contract), "--output", str(output)]), 2)
+                        self.assertEqual(source.read_bytes(), before[source])
+                hardlink = root / (source.name + ".link")
+                os.link(source, hardlink)
+                self.assertEqual(main([str(file), "--contract", str(contract), "--output", str(hardlink)]), 2)
+                self.assertEqual(hardlink.read_bytes(), before[source])
+            self.assertEqual(file.read_bytes(), before[file])
+            self.assertEqual(contract.read_bytes(), before[contract])
+
     def test_bom_csv_and_ragged_rows(self):
         with tempfile.TemporaryDirectory() as temp:
             file = pathlib.Path(temp) / "data.csv"
