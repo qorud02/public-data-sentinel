@@ -1,0 +1,10 @@
+**
+!Dockerfile
+!LICENSE
+!README.md
+!pyproject.toml
+!src/
+!src/public_data_sentinel/
+!src/public_data_sentinel/*.py
+!scripts/
+!scripts/verify_wheel.py

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "public-data-sentinel"
-version = "0.1.0"
-description = "Validate CSV and JSON public-data extracts against explicit, small data contracts."
+version = "0.2.0"
+description = "Validate CSV, TSV and JSON public-data extracts against explicit, small data contracts."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
