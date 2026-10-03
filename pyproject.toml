@@ -12,6 +12,9 @@ license = {text = "MIT"}
 authors = [{name = "qorud02"}]
 dependencies = []
 
+[project.optional-dependencies]
+test = ["markdown-it-py==4.2.0"]
+
 [project.scripts]
 data-sentinel = "public_data_sentinel.cli:main"
 

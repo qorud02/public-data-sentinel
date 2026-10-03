@@ -30,7 +30,7 @@ You do not need to activate the virtual environment.
 Windows PowerShell:
 
 ~~~powershell
-.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe -m public_data_sentinel.cli examples/valid.csv --contract examples/contract.json
 ~~~
@@ -38,13 +38,19 @@ Windows PowerShell:
 macOS / Linux:
 
 ~~~sh
-.venv/bin/python -m pip install -e .
+.venv/bin/python -m pip install -e ".[test]"
 .venv/bin/python -m unittest discover -s tests -v
 .venv/bin/python -m public_data_sentinel.cli examples/valid.csv --contract examples/contract.json
 ~~~
 
-For source-only work with an existing Python installation, no installation is
-needed. The package uses a src/ layout, so set PYTHONPATH:
+For source-only CLI work with an existing Python installation, no installation
+is needed. To run the tests, install the test-only renderer first:
+
+~~~sh
+python -m pip install markdown-it-py==4.2.0
+~~~
+
+The package uses a src/ layout, so set PYTHONPATH:
 
 ~~~powershell
 # Windows PowerShell, from the repository root
@@ -60,7 +66,8 @@ PYTHONPATH=src python -m public_data_sentinel.cli examples/valid.csv --contract 
 ~~~
 
 한국어: Python 3.10 이상을 사용합니다. 가상환경을 활성화하지 않아도 위 명령을
-실행할 수 있습니다. 설치 없이 실행할 때는 src를 PYTHONPATH에 넣어 주세요.
+실행할 수 있습니다. CLI 실행에는 외부 패키지가 필요하지 않습니다. 테스트에는
+markdown-it-py 4.2.0을 설치하고, src를 PYTHONPATH에 넣어 주세요.
 
 ## Show the behavior / 변경 검증
 
