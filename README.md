@@ -66,7 +66,7 @@ Contract:
 
 Columns are required by default; set `"required": false` for an optional field. Supported types are `string`, `integer`, `decimal`, and `date` (`YYYY-MM-DD`). Numeric bounds are inclusive. The composite key is checked only when all its components have type-valid, nonmissing values. Unknown contract keys fail early so a misspelled rule cannot silently weaken a check.
 
-JSON arrays work directly. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV/TSV rows, and nonstandard JSON numbers are rejected.
+JSON arrays work directly. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV/TSV rows, and nonstandard JSON numbers are rejected. JSON numbers outside the supported Decimal range and nesting beyond the Python parser limit return input-error exit `2`, including in contract files. Large finite values such as `1e400` retain exact decimal precision.
 
 ## Tab-delimited extracts
 
@@ -76,7 +76,7 @@ Use the same contract directly with a tab-delimited `.tsv` file:
 data-sentinel examples/valid.tsv --contract examples/contract.json
 ```
 
-The example returns `0` with three records and no issues. `.TSV` is also accepted. The reader uses a fixed tab delimiter, keeps leading zeroes and surrounding whitespace, and supports quoted tabs and newlines. CSV uses commas. `--records-key` applies to JSON inputs.
+The example returns `0` with three records and no issues. `.TSV` is also accepted. The reader uses a fixed tab delimiter, keeps leading zeroes and surrounding whitespace, and supports quoted tabs and newlines. CR, LF, and CRLF inside quoted fields and headers remain distinct, including in enum and uniqueness checks. Ragged-row errors report the physical line where the record ends. CSV uses commas. `--records-key` applies to JSON inputs.
 
 ## Automation and Python use
 
