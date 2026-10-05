@@ -76,6 +76,8 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         "unicode-👋.csv": unicode_csv.getvalue().encode("utf-8"),
         "unicode-👋-contract.json": json.dumps({"columns": {unicode_field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
         "literal-contract.json": json.dumps({"columns": {field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
+        "surrogate-field.json": b'[{"amount":1,"\\ud800":1}]',
+        "surrogate-contract.json": b'{"columns":{"amount":{"type":"decimal"}}}',
     }
     for name, payload in payloads.items():
         (temp / name).write_bytes(payload)
@@ -113,6 +115,17 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
     for name in ("malformed.json", "duplicate-key.json", "ragged.csv", "duplicate-header.csv",
                  "ragged.tsv", "duplicate-header.tsv", "unterminated.tsv"):
         run([extra(name), "--contract", contract], 2, name, False)
+    if args.python:
+        for report_format in ("json", "markdown"):
+            for exists in (False, True):
+                output = temp / ("surrogate-" + report_format + "-" + str(exists))
+                previous = b"previous report\x00\xff\n"
+                if exists:
+                    output.write_bytes(previous)
+                run([extra("surrogate-field.json"), "--contract", extra("surrogate-contract.json"),
+                     "--format", report_format, "--output", str(output)], 2,
+                    report_format + "-encoding-error-preserves-" + ("existing" if exists else "absent") + "-report", False)
+                assert (output.read_bytes() == previous) if exists else not output.exists()
     run([extra("valid.TSV"), "--contract", contract, "--records-key", "items"], 2, "tsv-records-key-rejected", False)
     for name in ("literal.csv", "literal.tsv", "literal.json"):
         arguments = [extra(name), "--contract", extra("literal-contract.json")]
