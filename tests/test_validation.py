@@ -258,7 +258,8 @@ class CLITests(unittest.TestCase):
     def test_tsv_quoted_tabs_newlines_and_quotes(self):
         with tempfile.TemporaryDirectory() as temp:
             file = pathlib.Path(temp) / "data.tsv"
-            file.write_text('id\tnote\n00123\t"탭\t줄\n인용 ""문자"""\n', encoding="utf-8")
+            # Keep the intended LF fixture on Windows as well as POSIX.
+            file.write_bytes('id\tnote\n00123\t"탭\t줄\n인용 ""문자"""\n'.encode("utf-8"))
             records, headers = read_records(file)
             self.assertEqual(headers, ["id", "note"])
             self.assertEqual(records, [{"id": "00123", "note": '탭\t줄\n인용 "문자"'}])
