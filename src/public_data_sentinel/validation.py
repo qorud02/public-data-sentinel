@@ -157,7 +157,7 @@ def validate(records, contract, *, headers=None):
 
 
 def load_json(text):
-    """Reject ambiguous duplicate keys and nonstandard JSON numeric constants."""
+    """Reject ambiguous keys, nonfinite numbers, and unsupported JSON inputs."""
     def pairs(values):
         result = {}
         for key, value in values:
@@ -169,4 +169,8 @@ def load_json(text):
     def constant(value):
         raise ValueError(f"Nonstandard JSON constant: {value}")
 
-    return json.loads(text, object_pairs_hook=pairs, parse_float=Decimal, parse_constant=constant)
+    try:
+        # Reuse strict finite conversion, including when Decimal traps are off.
+        return json.loads(text, object_pairs_hook=pairs, parse_float=_decimal, parse_constant=constant)
+    except RecursionError:
+        raise ValueError("JSON nesting exceeds the supported parser depth") from None

@@ -12,24 +12,28 @@ from .validation import ContractError, load_json, validate
 
 
 def read_records(path, records_key=None):
-    text = pathlib.Path(path).read_text(encoding="utf-8-sig")
-    suffix = pathlib.Path(path).suffix.lower()
+    source = pathlib.Path(path)
+    suffix = source.suffix.lower()
+    # Universal-newline translation changes quoted CSV/TSV values and keys.
+    # Keep JSON's existing text decoding and error locations unchanged.
+    with source.open(encoding="utf-8-sig", newline="" if suffix in (".csv", ".tsv") else None) as stream:
+        text = stream.read()
     if suffix in (".csv", ".tsv"):
         format_name = "TSV" if suffix == ".tsv" else "CSV"
         if records_key:
             raise ValueError("--records-key applies only to JSON")
-        reader = csv.reader(io.StringIO(text), delimiter="\t" if suffix == ".tsv" else ",", strict=True)
+        reader = csv.reader(io.StringIO(text, newline=""), delimiter="\t" if suffix == ".tsv" else ",", strict=True)
         headers = next(reader, None)
         if not headers:
             raise ValueError(f"{format_name} is empty")
         if any(not header for header in headers) or len(headers) != len(set(headers)):
             raise ValueError(f"{format_name} headers must be nonempty and unique")
         records = []
-        for row_number, row in enumerate(reader, 2):
+        for row in reader:
             if not row:
                 continue
             if len(row) != len(headers):
-                raise ValueError(f"{format_name} line {row_number}: expected {len(headers)} fields, got {len(row)}")
+                raise ValueError(f"{format_name} line {reader.line_num}: expected {len(headers)} fields, got {len(row)}")
             records.append(dict(zip(headers, row)))
         return records, headers
     if suffix != ".json":

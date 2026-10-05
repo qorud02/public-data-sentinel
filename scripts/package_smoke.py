@@ -76,7 +76,27 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         "unicode-👋.csv": unicode_csv.getvalue().encode("utf-8"),
         "unicode-👋-contract.json": json.dumps({"columns": {unicode_field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
         "literal-contract.json": json.dumps({"columns": {field: {"type": "integer"}}}, ensure_ascii=False).encode("utf-8"),
+        "outside-decimal-range.json": b'[{"amount":1e999999999999999999999999999999}]',
+        "outside-decimal-range-contract.json": b'{"columns":{"amount":{"type":"decimal","minimum":1e999999999999999999999999999999}}}',
+        "outside-decimal-range-envelope.json": b'{"items":[{"amount":1}],"metadata":1e999999999999999999999999999999}',
+        "large-finite.json": b'[{"amount":1e400},{"amount":-1e-400}]',
+        "decimal-contract.json": b'{"columns":{"amount":{"type":"decimal"}}}',
     }
+    payloads["newline-unique-contract.json"] = json.dumps({
+        "columns": {"id": {"type": "string"}}, "unique_by": ["id"]
+    }).encode("utf-8")
+    payloads["newline-enum-contract.json"] = json.dumps({
+        "columns": {"id": {"type": "string", "enum": ["station\nname"]}}
+    }).encode("utf-8")
+    for suffix, delimiter in (("csv", ","), ("tsv", "\t")):
+        content = io.StringIO(newline="")
+        csv.writer(content, delimiter=delimiter).writerows([
+            ["id"], ["station\rname"], ["station\nname"], ["station\r\nname"]
+        ])
+        payloads["newline-unique." + suffix] = content.getvalue().encode("utf-8")
+        content = io.StringIO(newline="")
+        csv.writer(content, delimiter=delimiter).writerows([["id"], ["station\r\nname"]])
+        payloads["newline-enum." + suffix] = content.getvalue().encode("utf-8")
     for name, payload in payloads.items():
         (temp / name).write_bytes(payload)
         (temp / name).chmod(0o644)
@@ -98,6 +118,9 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         result = subprocess.run(prefix + arguments, cwd=temp, env=clean_env,
                                 capture_output=True, text=True, encoding="utf-8", timeout=180)
         assert result.returncode == expected, (label, expected, result.returncode, result.stdout, result.stderr)
+        if expected == 2:
+            assert result.stdout == "" and result.stderr.startswith("data-sentinel: "), (label, result.stdout, result.stderr)
+            assert "Traceback" not in result.stderr, (label, result.stderr)
         checks.append(label)
         return json.loads(result.stdout) if report else result.stdout
     assert "contract" in run(["--help"], 0, "console-help", False)
@@ -110,9 +133,34 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
     assert valid_tsv["valid"] and valid_tsv["records_checked"] == 3 and valid_tsv["error_count"] == 0
     invalid_tsv = run([extra("invalid.tsv"), "--contract", contract], 1, "tsv-data-violations")
     assert not invalid_tsv["valid"] and invalid_tsv["records_checked"] == 3 and invalid_tsv["error_count"] == 5
+    for suffix in ("csv", "tsv"):
+        source = temp / ("newline-unique." + suffix)
+        before = source.read_bytes()
+        report = run([extra(source.name), "--contract", extra("newline-unique-contract.json")],
+                     0, suffix + "-newline-distinct-identifiers")
+        assert report["valid"] and report["records_checked"] == 3, report
+        assert source.read_bytes() == before
+        source = temp / ("newline-enum." + suffix)
+        before = source.read_bytes()
+        report = run([extra(source.name), "--contract", extra("newline-enum-contract.json")],
+                     1, suffix + "-newline-enum-decoy-rejected")
+        assert report["error_count"] == 1 and report["issues"][0]["code"] == "enum", report
+        assert source.read_bytes() == before
     for name in ("malformed.json", "duplicate-key.json", "ragged.csv", "duplicate-header.csv",
                  "ragged.tsv", "duplicate-header.tsv", "unterminated.tsv"):
         run([extra(name), "--contract", contract], 2, name, False)
+    for source, rules, options, label in (
+        ("outside-decimal-range.json", "decimal-contract.json", [], "json-out-of-range-input"),
+        ("large-finite.json", "outside-decimal-range-contract.json", [], "json-out-of-range-contract"),
+        ("outside-decimal-range-envelope.json", "decimal-contract.json", ["--records-key", "items"],
+         "json-out-of-range-before-record-selection"),
+    ):
+        originals = {name: (temp / name).read_bytes() for name in (source, rules)}
+        run([extra(source), "--contract", extra(rules)] + options, 2, label, False)
+        assert {name: (temp / name).read_bytes() for name in originals} == originals
+    finite = run([extra("large-finite.json"), "--contract", extra("decimal-contract.json")],
+                 0, "json-large-finite-values")
+    assert finite["valid"] and finite["records_checked"] == 2 and finite["error_count"] == 0, finite
     run([extra("valid.TSV"), "--contract", contract, "--records-key", "items"], 2, "tsv-records-key-rejected", False)
     for name in ("literal.csv", "literal.tsv", "literal.json"):
         arguments = [extra(name), "--contract", extra("literal-contract.json")]
