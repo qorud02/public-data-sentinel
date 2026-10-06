@@ -20,7 +20,7 @@ def read_records(path, records_key=None):
         text = stream.read()
     if suffix in (".csv", ".tsv"):
         format_name = "TSV" if suffix == ".tsv" else "CSV"
-        if records_key:
+        if records_key is not None:
             raise ValueError("--records-key applies only to JSON")
         reader = csv.reader(io.StringIO(text, newline=""), delimiter="\t" if suffix == ".tsv" else ",", strict=True)
         headers = next(reader, None)
@@ -39,7 +39,7 @@ def read_records(path, records_key=None):
     if suffix != ".json":
         raise ValueError("Input filename must end in .csv, .tsv or .json")
     records = load_json(text)
-    if records_key:
+    if records_key is not None:
         if not isinstance(records, dict) or records_key not in records:
             raise ValueError(f"JSON object does not contain records key {records_key!r}")
         records = records[records_key]

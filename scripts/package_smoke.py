@@ -82,6 +82,14 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         "large-finite.json": b'[{"amount":1e400},{"amount":-1e-400}]',
         "decimal-contract.json": b'{"columns":{"amount":{"type":"decimal"}}}',
         "surrogate-field.json": b'[{"amount":1,"\\ud800":1}]',
+        "selector-contract.json": b'{"columns":{"id":{"type":"string"}}}',
+        "selector-array.json": b'[{"id":"001"}]',
+        "selector-envelope.json": b'{"": [{"id":"001"}], "items": [{"id":"002"}]}',
+        "selector-empty.json": b'{"": [], "items": [{"id":"001"}]}',
+        "selector-missing.json": b'{"items": [{"id":"001"}]}',
+        "selector-nonarray.json": b'{"": {}}',
+        "selector.csv": b'id\n001\n',
+        "selector.tsv": b'id\n001\n',
     }
     payloads["newline-unique-contract.json"] = json.dumps({
         "columns": {"id": {"type": "string"}}, "unique_by": ["id"]
@@ -134,6 +142,34 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
     assert valid_tsv["valid"] and valid_tsv["records_checked"] == 3 and valid_tsv["error_count"] == 0
     invalid_tsv = run([extra("invalid.tsv"), "--contract", contract], 1, "tsv-data-violations")
     assert not invalid_tsv["valid"] and invalid_tsv["records_checked"] == 3 and invalid_tsv["error_count"] == 5
+    for source, options, expected, label in (
+        ("selector-array.json", [], 0, "json-absent-selector"),
+        ("selector-envelope.json", ["--records-key", "items"], 0, "json-named-selector"),
+        ("selector-envelope.json", ["--records-key", ""], 0, "json-empty-string-selector"),
+        ("selector-empty.json", ["--records-key=",], 1, "json-empty-selected-array"),
+    ):
+        originals = {name: (temp / name).read_bytes() for name in (source, "selector-contract.json")}
+        report = run([extra(source), "--contract", extra("selector-contract.json")] + options,
+                     expected, label)
+        assert report["valid"] == (expected == 0) and report["records_checked"] == (1 if expected == 0 else 0), report
+        assert report["error_count"] == expected, report
+        if expected == 1:
+            assert report["issues"][0]["code"] == "empty_data", report
+        assert {name: (temp / name).read_bytes() for name in originals} == originals
+    for source, options in (
+        ("selector-envelope.json", []),
+        ("selector-array.json", ["--records-key", ""]),
+        ("selector-missing.json", ["--records-key", ""]),
+        ("selector-nonarray.json", ["--records-key", ""]),
+        ("selector.csv", ["--records-key", ""]),
+        ("selector.tsv", ["--records-key", ""]),
+        ("selector.csv", ["--records-key", "items"]),
+        ("selector.tsv", ["--records-key", "items"]),
+    ):
+        originals = {name: (temp / name).read_bytes() for name in (source, "selector-contract.json")}
+        run([extra(source), "--contract", extra("selector-contract.json")] + options,
+            2, source + "-selector-rejected-" + repr(options), False)
+        assert {name: (temp / name).read_bytes() for name in originals} == originals
     for suffix in ("csv", "tsv"):
         source = temp / ("newline-unique." + suffix)
         before = source.read_bytes()
