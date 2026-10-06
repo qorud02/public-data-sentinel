@@ -66,7 +66,9 @@ Contract:
 
 Columns are required by default; set `"required": false` for an optional field. Supported types are `string`, `integer`, `decimal`, and `date` (`YYYY-MM-DD`). Numeric bounds are inclusive. The composite key is checked only when all its components have type-valid, nonmissing values. Unknown contract keys fail early so a misspelled rule cannot silently weaken a check.
 
-JSON arrays work directly. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV/TSV rows, and nonstandard JSON numbers are rejected. JSON numbers outside the supported Decimal range and nesting beyond the Python parser limit return input-error exit `2`, including in contract files. Large finite values such as `1e400` retain exact decimal precision.
+JSON arrays work directly when `--records-key` is omitted. For an API-style envelope such as `{"items": [...]}`, add `--records-key items`. Use `--records-key=""` to select a top-level empty-string key, such as `{"": [...]}`. Any explicit selector requires a JSON object containing that key with an array value; root arrays, missing keys, non-array values, CSV and TSV return input-error exit `2`. A selected empty array returns data-violation exit `1` with an `empty_data` issue.
+
+Numeric JSON identifiers fail a string contract instead of silently losing leading zeroes. UTF-8 BOM files are supported; duplicate headers, duplicate JSON keys, ragged CSV/TSV rows, and nonstandard JSON numbers are rejected. JSON numbers outside the supported Decimal range and nesting beyond the Python parser limit return input-error exit `2`, including in contract files. Large finite values such as `1e400` retain exact decimal precision.
 
 ## Tab-delimited extracts
 
