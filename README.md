@@ -127,6 +127,32 @@ Executable examples and regression tests document the tool's behavior.
 
 MIT license.
 
+## Verify source and wheel distributions
+
+Using Python 3.12 or later, install the build and test tools and verify the
+actual archives:
+
+```sh
+python -m pip install build ".[test]"
+python -m build --outdir dist
+python scripts/verify_distribution.py dist
+```
+
+The verifier compares archived fixtures, scripts and source files with the
+checkout, rejects unchecked wheel payloads and native source-archive modules,
+runs tests from the extracted `src/` tree, then installs the wheel without
+dependencies in a separate environment. It checks the installed CLI
+outside the checkout, including rendered Markdown, UTF-8 output and source-file
+protection. The verifier removes any previous `dist/SHA256SUMS` before checking,
+then atomically records both archives after every check passes. Checks use private
+archive copies and confirm that the original files still match before recording
+checksums. Always check its exit status as well as the checksums.
+
+The [distribution workflow](.github/workflows/distribution.yml) retains these
+verified files for seven days. It does not publish a package, container or release.
+The runtime still supports Python 3.10 and newer; the separate build verification
+uses Python 3.12 and the test-only Markdown renderer.
+
 ## Container and wheel
 
 The Linux amd64 image includes Python 3.12 and an installed Sentinel wheel. From this repository directory:

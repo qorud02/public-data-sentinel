@@ -1,0 +1,12 @@
+include CONTRIBUTING.md
+include ci/github-actions.yml
+include examples/contract.json
+include examples/valid.csv
+include examples/invalid.csv
+include examples/valid.tsv
+include examples/valid-report.json
+include examples/invalid-report.md
+include scripts/verify_distribution.py
+include scripts/verify_wheel.py
+include scripts/package_smoke.py
+global-exclude *.py[cod]
