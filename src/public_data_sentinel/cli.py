@@ -101,6 +101,10 @@ def main(argv=None):
         report = validate(records, contract, headers=headers)
         output = markdown(report) if args.format == "markdown" else json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         if args.output:
+            # Check encoding before opening in write mode: escaped lone
+            # surrogates in JSON field names can make a report unencodable.
+            # Preserve an existing report (or absent target) on that error.
+            output.encode("utf-8")
             pathlib.Path(args.output).write_text(output, encoding="utf-8")
         else:
             if hasattr(sys.stdout, "buffer"):

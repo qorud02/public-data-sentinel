@@ -82,6 +82,12 @@ The example returns `0` with three records and no issues. `.TSV` is also accepte
 
 Exit statuses: **0** = passed, **1** = data violations, **2** = unreadable input, malformed file, or invalid contract. Output cannot overwrite the input or contract, including resolved path aliases and existing hard links to either file.
 
+Report text is checked for UTF-8 encodability before an output file is opened.
+If an unpaired Unicode surrogate from a JSON field name appears in the report,
+the CLI returns exit `2` without truncating an existing report or creating an
+empty one. Valid Unicode, including
+emoji written as JSON surrogate pairs, is preserved.
+
 Version 0.2.1 writes JSON and Markdown reports as UTF-8 on stdout and in `--output` files. Pipes and redirects preserve Unicode column names on Windows, including when a legacy code page is configured.
 
 ```python
