@@ -81,6 +81,7 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
         "outside-decimal-range-envelope.json": b'{"items":[{"amount":1}],"metadata":1e999999999999999999999999999999}',
         "large-finite.json": b'[{"amount":1e400},{"amount":-1e-400}]',
         "decimal-contract.json": b'{"columns":{"amount":{"type":"decimal"}}}',
+        "surrogate-field.json": b'[{"amount":1,"\\ud800":1}]',
     }
     payloads["newline-unique-contract.json"] = json.dumps({
         "columns": {"id": {"type": "string"}}, "unique_by": ["id"]
@@ -161,6 +162,17 @@ with tempfile.TemporaryDirectory(prefix="sentinel-package-smoke-") as directory:
     finite = run([extra("large-finite.json"), "--contract", extra("decimal-contract.json")],
                  0, "json-large-finite-values")
     assert finite["valid"] and finite["records_checked"] == 2 and finite["error_count"] == 0, finite
+    if args.python:
+        for report_format in ("json", "markdown"):
+            for exists in (False, True):
+                output = temp / ("surrogate-" + report_format + "-" + str(exists))
+                previous = b"previous report\x00\xff\n"
+                if exists:
+                    output.write_bytes(previous)
+                run([extra("surrogate-field.json"), "--contract", extra("decimal-contract.json"),
+                     "--format", report_format, "--output", str(output)], 2,
+                    report_format + "-encoding-error-preserves-" + ("existing" if exists else "absent") + "-report", False)
+                assert (output.read_bytes() == previous) if exists else not output.exists()
     run([extra("valid.TSV"), "--contract", contract, "--records-key", "items"], 2, "tsv-records-key-rejected", False)
     for name in ("literal.csv", "literal.tsv", "literal.json"):
         arguments = [extra(name), "--contract", extra("literal-contract.json")]
